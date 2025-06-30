@@ -1,0 +1,232 @@
+#include <iostream>
+#include <cstring>
+#include <limits>
+#include <queue>
+#include <cmath>
+using namespace std;
+
+const int MAX_PHARMACIES = 20;
+const double INF = numeric_limits<double>::max();
+
+struct Pharmacy {
+    char name[50];
+    int neighbors[10];
+    double distances[10];
+    int neighborCount;
+    bool isOnDuty;
+    double x, y;
+};
+
+Pharmacy pharmacies[MAX_PHARMACIES];
+int pharmacyCount = 20;
+
+double euclideanDistance(int a, int b) {
+    double dx = pharmacies[a].x - pharmacies[b].x;
+    double dy = pharmacies[a].y - pharmacies[b].y;
+    return sqrt(dx * dx + dy * dy);
+}
+
+void addEdge(int from, int to, double dist) {
+    int idx = pharmacies[from].neighborCount++;
+    pharmacies[from].neighbors[idx] = to;
+    pharmacies[from].distances[idx] = dist;
+
+    idx = pharmacies[to].neighborCount++;
+    pharmacies[to].neighbors[idx] = from;
+    pharmacies[to].distances[idx] = dist;
+}
+
+void printPath(int to, int from[]) {
+    if (from[to] == -1) return;
+    printPath(from[to], from);
+    cout << " -> " << pharmacies[to].name;
+}
+
+int BFS(int start, int& foundPharmacy, int from[]) {
+    bool visited[MAX_PHARMACIES] = {false};
+    queue<int> q;
+    double dist[MAX_PHARMACIES];
+
+    for (int i = 0; i < pharmacyCount; ++i) {
+        from[i] = -1;
+        dist[i] = INF;
+    }
+
+    visited[start] = true;
+    dist[start] = 0;
+    q.push(start);
+
+    while (!q.empty()) {
+        int u = q.front(); q.pop();
+        if (pharmacies[u].isOnDuty) {
+            foundPharmacy = u;
+            break;
+        }
+
+        for (int i = 0; i < pharmacies[u].neighborCount; ++i) {
+            int v = pharmacies[u].neighbors[i];
+            if (!visited[v]) {
+                visited[v] = true;
+                dist[v] = dist[u] + 1;
+                from[v] = u;
+                q.push(v);
+            }
+        }
+    }
+
+    return dist[foundPharmacy];
+}
+
+bool DFSRec(int current, bool visited[], int from[], int& foundPharmacy) {
+    visited[current] = true;
+    if (pharmacies[current].isOnDuty) {
+        foundPharmacy = current;
+        return true;
+    }
+
+    for (int i = 0; i < pharmacies[current].neighborCount; ++i) {
+        int v = pharmacies[current].neighbors[i];
+        if (!visited[v]) {
+            from[v] = current;
+            if (DFSRec(v, visited, from, foundPharmacy)) return true;
+        }
+    }
+    return false;
+}
+
+void DFS(int start, int& foundPharmacy, int from[]) {
+    bool visited[MAX_PHARMACIES] = {false};
+    for (int i = 0; i < pharmacyCount; ++i) from[i] = -1;
+    DFSRec(start, visited, from, foundPharmacy);
+}
+
+double AStar(int start, int& foundPharmacy, int from[], int heuristicType) {
+    bool visited[MAX_PHARMACIES] = {false};
+    double gScore[MAX_PHARMACIES], fScore[MAX_PHARMACIES];
+    for (int i = 0; i < pharmacyCount; ++i) {
+        gScore[i] = fScore[i] = INF;
+        from[i] = -1;
+    }
+    gScore[start] = 0;
+
+    auto heuristic = [&](int node) {
+        double minDist = INF;
+        for (int i = 0; i < pharmacyCount; ++i) {
+            if (pharmacies[i].isOnDuty) {
+                double dist = euclideanDistance(node, i);
+                if (heuristicType == 2) dist += 1;
+                if (dist < minDist) minDist = dist;
+            }
+        }
+        return minDist;
+    };
+
+    fScore[start] = heuristic(start);
+
+    while (true) {
+        int current = -1;
+        double minF = INF;
+
+        for (int i = 0; i < pharmacyCount; ++i) {
+            if (!visited[i] && fScore[i] < minF) {
+                minF = fScore[i];
+                current = i;
+            }
+        }
+        if (current == -1) break;
+        visited[current] = true;
+
+        if (pharmacies[current].isOnDuty) {
+            foundPharmacy = current;
+            break;
+        }
+
+        for (int i = 0; i < pharmacies[current].neighborCount; ++i) {
+            int neighbor = pharmacies[current].neighbors[i];
+            double tentativeG = gScore[current] + pharmacies[current].distances[i];
+            if (tentativeG < gScore[neighbor]) {
+                gScore[neighbor] = tentativeG;
+                fScore[neighbor] = tentativeG + heuristic(neighbor);
+                from[neighbor] = current;
+            }
+        }
+    }
+    return gScore[foundPharmacy];
+}
+
+void initPharmacies() {
+    const char* names[MAX_PHARMACIES] = {
+        "Royal Pharmacy", "Libya Pharmacy", "Noor Al-Manar Pharmacy", "Hay Dimashq Pharmacy",
+        "Shuhada Al-Manshiya Pharmacy", "Firas Pharmacy", "Be Well Pharmacy", "Central Jadeed Pharmacy",
+        "Al-Buraq Pharmacy", "Furnaj Pharmacy", "Anwar Pharmacy", "Hassani Pharmacy", "Al-Akheel Pharmacy",
+        "Al-Karwi Pharmacy", "Al-Ezzabi Pharmacy", "Pharmacy Central Pharmacy", "Ayoub Pharmacy",
+        "Al-Tahir Pharmacy", "Al-Badri Pharmacy", "Taj Medicine Pharmacy"
+    };
+
+    double coords[MAX_PHARMACIES][2] = {
+        {0,0}, {2,1}, {4,2}, {5,3}, {7,5}, {8,6}, {9,7}, {11,8}, {12,9}, {13,10},
+        {15,11}, {16,12}, {18,13}, {20,14}, {22,15}, {23,16}, {24,17}, {25,18}, {27,19}, {29,20}
+    };
+
+    for (int i = 0; i < pharmacyCount; ++i) {
+        strcpy(pharmacies[i].name, names[i]);
+        pharmacies[i].neighborCount = 0;
+        pharmacies[i].isOnDuty = false;
+        pharmacies[i].x = coords[i][0];
+        pharmacies[i].y = coords[i][1];
+    }
+
+    addEdge(0,1,2.0); addEdge(1,2,2.5); addEdge(2,3,1.2); addEdge(2,5,3.1); addEdge(2,13,5.5);
+    addEdge(3,4,2.4); addEdge(4,5,1.0); addEdge(5,6,2.6); addEdge(6,7,1.5); addEdge(6,8,2.2);
+    addEdge(7,8,1.9); addEdge(7,9,2.8); addEdge(8,9,1.3); addEdge(9,10,2.0); addEdge(10,11,3.0);
+    addEdge(11,12,1.8); addEdge(13,14,2.7); addEdge(14,15,2.3); addEdge(14,16,1.6);
+    addEdge(15,18,3.5); addEdge(16,17,1.4); addEdge(17,18,2.1); addEdge(17,19,3.3); addEdge(18,19,1.2);
+
+    pharmacies[4].isOnDuty = true;
+    pharmacies[8].isOnDuty = true;
+    pharmacies[11].isOnDuty = true;
+    pharmacies[14].isOnDuty = true;
+    pharmacies[19].isOnDuty = true;
+}
+
+int main() {
+    initPharmacies();
+    string location;
+    cout << "Enter your area (Furnaj, Zanata, Ain Zara): ";
+    getline(cin, location);
+
+    int userIndex = 0;
+    if (location == "Furnaj") userIndex = 9;
+    else if (location == "Zanata") userIndex = 14;
+    else if (location == "Ain Zara") userIndex = 10;
+    else cout << "Unknown location, defaulting to Royal Pharmacy.\n";
+
+    int fromBFS[MAX_PHARMACIES], fromDFS[MAX_PHARMACIES], fromAStar[MAX_PHARMACIES];
+    int bfsPh = -1, dfsPh = -1, aPh = -1;
+
+    double d1 = BFS(userIndex, bfsPh, fromBFS);
+    DFS(userIndex, dfsPh, fromDFS);
+
+    cout << "\n[1] BFS Result:\n";
+    cout << "Nearest on-duty: " << pharmacies[bfsPh].name << ", Distance: " << d1 << "\n";
+    cout << "Path: " << pharmacies[userIndex].name;
+    printPath(bfsPh, fromBFS);
+
+    cout << "\n\n[2] DFS Result:\n";
+    cout << "Nearest on-duty: " << pharmacies[dfsPh].name << "\n";
+    cout << "Path: " << pharmacies[userIndex].name;
+    printPath(dfsPh, fromDFS);
+
+    cout << "\n\nChoose A* heuristic type:\n1. Admissible\n2. Consistent\nEnter choice: ";
+    int heurChoice; cin >> heurChoice;
+
+    double d3 = AStar(userIndex, aPh, fromAStar, heurChoice);
+
+    cout << "\n[3] A* Result:\n";
+    cout << "Nearest on-duty: " << pharmacies[aPh].name << ", Distance: " << d3 << "\n";
+    cout << "Path: " << pharmacies[userIndex].name;
+    printPath(aPh, fromAStar);
+    cout << endl;
+
+    return 0;
+}
